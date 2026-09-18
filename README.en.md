@@ -4,17 +4,19 @@
 
 A small community-built, open-source tool. No side-taking, no naming names, no decisions made on your behalf.
 
+> 🇬🇧 English | [中文（更完整）](README.md)
+
 ---
 
 ## When you see one cockroach
 
-One AI coding tool got caught packing users' entire workspaces for upload - .git history included, no in-app toggle, privacy settings be damned. Official apology, fix, open-source promise... and then what?
+An AI coding tool got caught packing users' entire workspaces for upload - .git history included, no in-app toggle, privacy settings be damned. Official apology, fix, open-source promise... and then what?
 
 Not an isolated case. Caught overseas, caught domestically. The old saying holds: **when you spot one cockroach, the walls are already crawling.**
 
 - Apart from a handful of open-source agents, **nobody knows what closed-source tools do behind your back**
 - Indie devs mostly don't care about data safety - but the moment **commercial code, client data, internal docs** are involved, privacy in B2B is a hard line
-- What's missing is a tool that makes AI tools' local data behavior **visible, controllable, and forensically documentable**
+- What's missing: making AI tools' local data behavior **visible, controllable, and forensically documentable**
 
 This project fills that gap. Community-grade, minimal, honest - it does not claim "enterprise-grade security".
 
@@ -98,14 +100,14 @@ No. Rules may only target the tools' own data dirs - your projects, `.git`, work
 Directory enumeration every 5 seconds. No service, no driver, no injection.
 
 **macOS / Linux?**
-Windows today (PS 5.1+). Rules are JSON - PRs welcome.
+Windows-only today. Rules are JSON - PRs welcome.
 
 **Are templates trustworthy?**
 Community observations only, inert, sourced; `verified` requires reproducible forensics. Don't trust it - verify it, or write your own.
 
 ## Origin
 
-Started as a hotfix after one incident ([forensics](docs/EVIDENCE-zcode.md)). Then it clicked: one vendor caught means all of them deserve a look - a patch shouldn't serve a single tool.
+Started as a hotfix after one incident ([forensics](docs/EVIDENCE-incident.md)). Then it clicked: one vendor caught means all of them deserve a look - a patch shouldn't serve a single tool.
 
 ## Contributing
 
