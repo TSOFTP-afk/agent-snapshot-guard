@@ -1,0 +1,25 @@
+{
+  "schema": "asg-rule/v1",
+  "app": "zcode",
+  "vendor": "zhipu-ai",
+  "display": "ZCode (Zhipu AI)",
+  "maturity": "verified",
+  "dataRoots": ["%USERPROFILE%/.zcode"],
+  "actions": {
+    "denyWriteDirs": ["v2/checkpoints"],
+    "deleteDirNames": ["checkpoints", "pending"],
+    "deleteFileNames": ["*.tar.gz.enc", "*.envelope.json"],
+    "quarantineFileNames": [],
+    "monitorFileNames": []
+  },
+  "telemetryHosts": [
+    "sdk.rum.aliyuncs.com",
+    "proj-xtrace-7e235817c9b9381c22d8b743908d469f-cn-beijing.cn-beijing.log.aliyuncs.com"
+  ],
+  "notes": "Full-workspace snapshot (incl. complete .git history) captured at session end and uploaded regardless of in-app toggles. Forensics: docs/EVIDENCE-zcode.md. Vendor claims fixed on 2026-09-18 and promises to open-source; keep defenses until independently verified.",
+  "references": [
+    "https://forum.trae.cn/t/topic/181727",
+    "https://en.theblockbeats.news/flash/367816",
+    "https://blog.ferstar.org/posts/zcode-silent-workspace-snapshot-upload/"
+  ]
+}

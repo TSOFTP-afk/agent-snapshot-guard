@@ -1,0 +1,18 @@
+{
+  "schema": "asg-rule/v1",
+  "app": "my-ai-tool",
+  "vendor": "your-vendor",
+  "display": "Copy me and edit",
+  "maturity": "community",
+  "dataRoots": ["%USERPROFILE%/.my-ai-tool"],
+  "actions": {
+    "denyWriteDirs": [],
+    "deleteDirNames": [],
+    "deleteFileNames": [],
+    "quarantineFileNames": [],
+    "monitorFileNames": ["*.log"]
+  },
+  "telemetryHosts": [],
+  "notes": "Template rule. See docs/RULES.md for the schema and contribution policy. Verify data roots on your machine before submitting.",
+  "references": []
+}
