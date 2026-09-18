@@ -33,15 +33,10 @@ $StateFile     = Join-Path $StateDir 'state.json'
 $QuarantineDir = Join-Path $StateDir 'quarantine'
 $GuardLog      = Join-Path $StateDir 'guard.log'
 $UserRulesDir  = Join-Path $StateDir 'rules'
+$ScriptFile    = $PSCommandPath
 $ExamplesDir   = Join-Path (Split-Path -Parent $ScriptFile) 'examples'
 $StartupCmd    = Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs\Startup\agent-snapshot-guard.cmd'
-$ScriptFile    = $PSCommandPath
 if (-not $RulesDir) { $RulesDir = $UserRulesDir }
-
-# ... (identical function bodies as e2e-tested; see git history)
-# The full implementation is identical to commit d110f51 engine, with:
-#   - 'rules' action counts via $act variable (undefined-variable fix)
-#   - 'install' action prints guidance instead of silent no-op
 
 function Write-Info($m) { Write-Host ("[*] " + $m) }
 function Write-Bad($m)  { Write-Host ("[!] " + $m) -ForegroundColor Yellow }
@@ -233,7 +228,7 @@ function Start-Sentinel {
   if ($existing) { Write-Ok ("Sentinel already running (pid " + $existing + ")"); return }
   $engine = (Get-Process -Id $PID).Path
   if (-not $engine) { $engine = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe' }
-  Start-Process -FilePath $engine -ArgumentList @('-NoProfile','-ExecutionPolicy','Bypass','-WindowStyle','Hidden','-File',("'" + $ScriptFile + "'"),'-Action','run') -WindowStyle Hidden
+  Start-Process -FilePath $engine -ArgumentList @('-NoProfile','-ExecutionPolicy','Bypass','-WindowStyle','Hidden','-File',$ScriptFile,'-Action','run') -WindowStyle Hidden
   Start-Sleep -Seconds 2
   $now = Get-SentinelPid
   if ($now) { Write-Ok ("Sentinel started (pid " + $now + ")") } else { Write-Bad "Sentinel failed to start (check log)." }
