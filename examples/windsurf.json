@@ -1,0 +1,18 @@
+{
+  "schema": "asg-rule/v1",
+  "app": "windsurf",
+  "vendor": "codeium",
+  "display": "Windsurf (Codeium)",
+  "maturity": "community",
+  "dataRoots": ["%USERPROFILE%/.codeium/windsurf", "%APPDATA%/Windsurf"],
+  "actions": {
+    "denyWriteDirs": [],
+    "deleteDirNames": [],
+    "deleteFileNames": [],
+    "quarantineFileNames": [],
+    "monitorFileNames": ["*.json", "*.db", "*.log"]
+  },
+  "telemetryHosts": [],
+  "notes": "Community-submitted data roots; treat as experimental. Observability only.",
+  "references": []
+}

@@ -2,24 +2,24 @@
 #  AgentSnapshotGuard.ps1
 #  Rules-driven privacy sentinel for AI coding clients (Windows, PS 5.1+).
 #  ----------------------------------------------------------------------------
-#  Actions per app rule (rules/*.json):
-#    denyWriteDirs      - ACL write-deny (owner-right, no admin needed)
-#    deleteDirNames     - any dir with these names: contents get deleted
-#    deleteFileNames    - files matching these leaf patterns get deleted
-#    quarantineFileNames- files moved to quarantine (reversible, sha256 logged)
-#    monitorFileNames   - counted/logged only (observe-first posture)
-#
-#  Maturity policy:
-#    verified   - full forensics published; destructive actions armed by default
-#    community  - observe-only unless installed with -Force
+#  NEUTRAL BY DESIGN: the engine ships with ZERO active rules and takes no
+#  side. Vendor templates in examples/ are inert until the user explicitly:
+#      enable -App <name>    # observe mode (log/count only)
+#      arm   -App <name>     # act mode: deny-write + delete + quarantine
+#      disarm -App <name>    # back to observe
+#      disable -App <name>   # fully off, rule file removed
+#  Every step is the user's decision. Nothing is armed by default - including
+#  rules with full forensic backing.
 #
 #  Commands:
-#    .\AgentSnapshotGuard.ps1 install  [-App <name|all>] [-Force]
-#    .\AgentSnapshotGuard.ps1 status
-#    .\AgentSnapshotGuard.ps1 sweep    [-App <name|all>]
-#    .\AgentSnapshotGuard.ps1 rules
-#    .\AgentSnapshotGuard.ps1 uninstall [-App <name|all>]
-#    .\AgentSnapshotGuard.ps1 run       # sentinel foreground (used by autostart)
+#    examples                  list shipped templates (inert)
+#    rules                     list your active rules
+#    enable  -App <name>       activate a template / your rule (observe mode)
+#    disable -App <name>       turn off and remove the rule
+#    arm    -App <name>        apply deny-write + destructive actions
+#    disarm -App <name>        back to observe (deny removed)
+#    status | sweep | run      inspection / manual clean / sentinel loop
+#    uninstall                 full teardown
 #
 #  License: MIT
 # ============================================================================
@@ -27,11 +27,10 @@
 [CmdletBinding()]
 param(
   [Parameter(Position = 0)]
-  [ValidateSet('install','status','sweep','uninstall','run','rules')]
+  [ValidateSet('install','status','sweep','uninstall','run','rules','examples','enable','disable','arm','disarm')]
   [string]$Action = 'status',
 
-  [string]$App = 'all',
-  [switch]$Force,
+  [string]$App = '',
   [string]$RulesDir = ''
 )
 
@@ -40,9 +39,11 @@ $StateDir      = Join-Path $env:USERPROFILE '.agent-snapshot-guard'
 $StateFile     = Join-Path $StateDir 'state.json'
 $QuarantineDir = Join-Path $StateDir 'quarantine'
 $GuardLog      = Join-Path $StateDir 'guard.log'
+$UserRulesDir  = Join-Path $StateDir 'rules'
+$ExamplesDir   = Join-Path (Split-Path -Parent $ScriptFile) 'examples'
 $StartupCmd    = Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs\Startup\agent-snapshot-guard.cmd'
 $ScriptFile    = $PSCommandPath
-if (-not $RulesDir) { $RulesDir = Join-Path (Split-Path -Parent $ScriptFile) 'rules' }
+if (-not $RulesDir) { $RulesDir = $UserRulesDir }
 
 function Write-Info($m) { Write-Host ("[*] " + $m) }
 function Write-Bad($m)  { Write-Host ("[!] " + $m) -ForegroundColor Yellow }
@@ -52,11 +53,14 @@ function Expand-RootPath([string]$p) {
   return [Environment]::ExpandEnvironmentVariables(($p -replace '/', '\'))
 }
 
+function Get-RuleFilesFrom([string]$dir) {
+  if (-not (Test-Path -LiteralPath $dir)) { return @() }
+  return @(Get-ChildItem -LiteralPath $dir -Filter '*.json' -File -ErrorAction SilentlyContinue)
+}
+
 function Get-Rules {
   $out = @()
-  if (-not (Test-Path -LiteralPath $RulesDir)) { return $out }
-  $fs = @(Get-ChildItem -LiteralPath $RulesDir -Filter '*.json' -File -ErrorAction SilentlyContinue)
-  foreach ($f in $fs) {
+  foreach ($f in (Get-RuleFilesFrom $RulesDir)) {
     $r = $null
     try { $r = Get-Content -LiteralPath $f.FullName -Raw -Encoding UTF8 | ConvertFrom-Json } catch {}
     if ($r -and $r.schema -eq 'asg-rule/v1' -and $r.app) { $out += $r }
@@ -65,10 +69,13 @@ function Get-Rules {
   return $out
 }
 
-function Get-SelectedRules {
-  $all = Get-Rules
-  if ($App -eq 'all') { return $all }
-  return @($all | Where-Object { $_.app -eq $App })
+function Get-ExampleFile([string]$app) {
+  foreach ($f in (Get-RuleFilesFrom $ExamplesDir)) {
+    $r = $null
+    try { $r = Get-Content -LiteralPath $f.FullName -Raw -Encoding UTF8 | ConvertFrom-Json } catch {}
+    if ($r -and $r.app -eq $app) { return @{ file = $f; rule = $r } }
+  }
+  return $null
 }
 
 function Get-State {
@@ -162,11 +169,9 @@ function Invoke-Quarantine([string]$root,[string]$app,[string]$full) {
   return 'locked'
 }
 
-function Is-Armed($rule) {
-  if ($rule.maturity -eq 'verified') { return $true }
-  if ($Force) { return $true }
+function Test-Armed([string]$app) {
   $s = Get-State
-  return (@($s.armed) -contains $rule.app)
+  return (@($s.armed) -contains $app)
 }
 
 function Invoke-Classify([string]$root,$rule,[string]$full,[bool]$armed,[bool]$apply = $true) {
@@ -192,7 +197,7 @@ function Invoke-Classify([string]$root,$rule,[string]$full,[bool]$armed,[bool]$a
 }
 
 function Invoke-SweepRule($rule) {
-  $armed = Is-Armed $rule
+  $armed = Test-Armed $rule.app
   $total = 0
   foreach ($rootSpec in @($rule.dataRoots)) {
     $root = Expand-RootPath $rootSpec
@@ -236,53 +241,70 @@ function Start-Sentinel {
   if ($now) { Write-Ok ("Sentinel started (pid " + $now + ")") } else { Write-Bad "Sentinel failed to start (check log)." }
 }
 
-function Invoke-Install {
-  $rules = Get-SelectedRules
-  if (@($rules).Count -eq 0) { Write-Bad ("no rules matched: " + $App); return }
-  $s = Get-State
-  $enabledList = @($s.enabled); $armedList = @($s.armed)
-  foreach ($rule in $rules) {
-    $armed = ($rule.maturity -eq 'verified') -or $Force
-    $primaryRoot = Expand-RootPath @($rule.dataRoots)[0]
-    foreach ($dw in @($rule.actions.denyWriteDirs)) {
-      $ok = Enable-DenyPath $primaryRoot $dw
-      if ($ok) { Write-Ok ("[" + $rule.app + "] deny-write ACTIVE: " + (Join-Path $primaryRoot ($dw -replace '/', '\'))) }
-      else { Write-Bad ("[" + $rule.app + "] deny-write FAILED (not user-owned?): " + $dw) }
-    }
-    $n = Invoke-SweepRule $rule
-    Write-Info ("[" + $rule.app + "] initial sweep removed " + $n + " file(s)")
-    if ($armed) {
-      if ($armedList -notcontains $rule.app) { $armedList += $rule.app }
+function Invoke-Enable {
+  if (-not $App) { Write-Bad "pass -App <name>"; return }
+  if (-not (Test-Path -LiteralPath $UserRulesDir)) { New-Item -ItemType Directory -Force -Path $UserRulesDir | Out-Null }
+  $dest = Join-Path $UserRulesDir ($App + '.json')
+  if (-not (Test-Path -LiteralPath $dest)) {
+    $ex = Get-ExampleFile $Appn    if ($ex) {
+      Copy-Item -LiteralPath $ex.file.FullName -Destination $dest -Force
+      Write-Ok ("template activated: " + $App + " (from examples/)")
     } else {
-      Write-Info ("[" + $rule.app + "] monitor-only (maturity=" + $rule.maturity + "; arm with: install -App " + $rule.app + " -Force)")
+      Write-Bad ("no template for '" + $App + "'. Place your own rule at: " + $dest)
+      return
     }
-    if ($enabledList -notcontains $rule.app) { $enabledList += $rule.app }
   }
-  $s.enabled = $enabledList; $s.armed = $armedList
+  $s = Get-State
+  if (@($s.enabled) -notcontains $App) { $s.enabled = @($s.enabled) + $App }
   Save-State $s
+  Write-Ok ("[$App] enabled - OBSERVE mode (count/log only). It will never delete anything until you run: arm -App " + $App)
   Install-Autostart
   Start-Sentinel
 }
 
-function Invoke-Uninstall {
-  $rules = Get-SelectedRules
+function Invoke-Disable {
+  if (-not $App) { Write-Bad "pass -App <name>"; return }
+  Invoke-Disarm -Quiet
+  $dest = Join-Path $UserRulesDir ($App + '.json')
+  if (Test-Path -LiteralPath $dest) { Remove-Item -LiteralPath $dest -Force }
   $s = Get-State
-  foreach ($rule in $rules) {
-    $primaryRoot = Expand-RootPath @($rule.dataRoots)[0]
-    foreach ($dw in @($rule.actions.denyWriteDirs)) { Disable-DenyPath $primaryRoot $dw }
-    $s.enabled = @($s.enabled | Where-Object { $_ -ne $rule.app })
-    $s.armed   = @($s.armed   | Where-Object { $_ -ne $rule.app })
-    Write-Info ("[" + $rule.app + "] defenses removed")
-  }
+  $s.enabled = @($s.enabled | Where-Object { $_ -ne $App })
   Save-State $s
+  Write-Ok ("[$App] disabled and rule removed.")
   if (@($s.enabled).Count -eq 0) {
     $spid = Get-SentinelPid
     if ($spid) { Stop-Process -Id $spid -Force; Write-Info ("sentinel stopped (pid " + $spid + ")") }
     if (Test-Path -LiteralPath $StartupCmd) { Remove-Item -LiteralPath $StartupCmd -Force; Write-Info "autostart removed." }
-    Write-Ok "full teardown complete."
-  } else {
-    Write-Info ("still guarding: " + (@($s.enabled) -join ', '))
   }
+}
+
+function Invoke-Disarm([switch]$Quiet) {
+  if (-not $App) { Write-Bad "pass -App <name>"; return }
+  $rule = Get-Rules | Where-Object { $_.app -eq $App }
+  if ($rule) {
+    $primaryRoot = Expand-RootPath @($rule.dataRoots)[0]
+    foreach ($dw in @($rule.actions.denyWriteDirs)) { Disable-DenyPath $primaryRoot $dw }
+  }
+  $s = Get-State
+  $s.armed = @($s.armed | Where-Object { $_ -ne $App })
+  Save-State $s
+  if (-not $Quiet) { Write-Ok ("[$App] disarmed - back to observe mode.") }
+}
+
+function Invoke-Arm {
+  if (-not $App) { Write-Bad "pass -App <name>"; return }
+  $rule = Get-Rules | Where-Object { $_.app -eq $App }
+  if (-not $rule) { Write-Bad ("rule not enabled for '" + $App + "'. Run: enable -App " + $App); return }
+  $s = Get-State
+  if (@($s.armed) -notcontains $App) { $s.armed = @($s.armed) + $App }
+  Save-State $s
+  $primaryRoot = Expand-RootPath @($rule.dataRoots)[0]
+  foreach ($dw in @($rule.actions.denyWriteDirs)) {
+    $ok = Enable-DenyPath $primaryRoot $dw
+    if ($ok) { Write-Ok ("[$App] deny-write ACTIVE: " + (Join-Path $primaryRoot ($dw -replace '/', '\'))) }
+    else { Write-Bad ("[$App] deny-write FAILED (not user-owned?): " + $dw) }
+  }
+  Write-Ok ("[$App] ARMED - delete/quarantine/deny now active. disarm -App " + $App + " to revert.")
 }
 
 function Show-Status {
@@ -291,13 +313,18 @@ function Show-Status {
   $spid = Get-SentinelPid
   $sentStr = 'stopped'; if ($spid) { $sentStr = 'running (pid ' + $spid + ')' }
   $asStr = 'no'; if (Test-Path -LiteralPath $StartupCmd) { $asStr = 'yes' }
-  Write-Info ("engine: rules=" + @($rules).Count + "  sentinel=" + $sentStr + "  autostart=" + $asStr)
-  Write-Info ("{0,-14} {1,-9} {2,-11} {3}" -f 'APP','MODE','MATURITY','ARTIFACTS-NOW')
+  Write-Info ("engine: active-rules=" + @($rules).Count + "  sentinel=" + $sentStr + "  autostart=" + $asStr)
+  if (@($rules).Count -eq 0) {
+    Write-Info "no active rules - nothing is being watched or touched."
+    Write-Info ("run 'examples' to list templates, then 'enable -App <name>'.")
+    return
+  }
+  Write-Info ("{0,-14} {1,-9} {2,-11} {3}" -f 'APP','MODE','EVIDENCE','ARTIFACTS-NOW')
   foreach ($r in $rules) {
     $en = @($s.enabled) -contains $r.app
-    $armed = Is-Armed $r
-    $mode = 'off'
-    if ($en -and $armed) { $mode = 'ARMED' } elseif ($en) { $mode = 'monitor' }
+    $armed = Test-Armed $r.app
+    $mode = 'observe'
+    if ($en -and $armed) { $mode = 'ARMED' } elseif (-not $en) { $mode = 'inactive' }
     $files = 0
     foreach ($rootSpec in @($r.dataRoots)) {
       $root = Expand-RootPath $rootSpec
@@ -317,20 +344,42 @@ function Show-Status {
 }
 
 switch ($Action) {
+  'examples' {
+    Write-Info ("shipped templates (INERT until enabled): " + $ExamplesDir)
+    foreach ($f in (Get-RuleFilesFrom $ExamplesDir)) {
+      $r = $null
+      try { $r = Get-Content -LiteralPath $f.FullName -Raw -Encoding UTF8 | ConvertFrom-Json } catch {}
+      if ($r) {
+        Write-Host ("  {0,-14} evidence={1,-11} roots={2}" -f $r.app, $r.maturity, (@($r.dataRoots) -join ', '))
+      }
+    }
+    Write-Info "enable one with: enable -App <name>"
+  }
   'rules' {
     foreach ($r in Get-Rules) {
       Write-Host ("  {0,-14} {1,-11} roots={2}" -f $r.app, $r.maturity, (@($r.dataRoots) -join ', '))
-      if ($r.notes) { $first = ([string]$r.notes).Split("`n")[0]; Write-Host ("      " + $first) }
     }
+    if (@($rules).Count -eq 0) { Write-Info "(none active)" }
   }
   'status'    { Show-Status }
   'sweep'     {
+    $rules = Get-Rules
+    if (@($rules).Count -eq 0) { Write-Bad "no active rules."; return }
     $total = 0
-    foreach ($r in Get-SelectedRules) { $n = Invoke-SweepRule $r; $total += $n; Write-Info ("[" + $r.app + "] removed " + $n) }
+    foreach ($r in $rules) { $n = Invoke-SweepRule $r; $total += $n; Write-Info ("[" + $r.app + "] removed " + $n) }
     Write-Ok ("sweep done, removed " + $total + " file(s)")
   }
-  'install'   { Invoke-Install }
-  'uninstall' { Invoke-Uninstall }
+  'enable'    { Invoke-Enable }
+  'disable'   { Invoke-Disable }
+  'arm'       { Invoke-Arm }
+  'disarm'    { Invoke-Disarm }
+  'uninstall' {
+    foreach ($app in @((Get-State).enabled)) { $App = $app; Invoke-Disable }
+    $spid = Get-SentinelPid
+    if ($spid) { Stop-Process -Id $spid -Force; Write-Info ("sentinel stopped (pid " + $spid + ")") }
+    if (Test-Path -LiteralPath $StartupCmd) { Remove-Item -LiteralPath $StartupCmd -Force; Write-Info "autostart removed." }
+    Write-Ok "full teardown complete. Quarantine kept for evidence."
+  }
   'run'       {
     $created = $false
     $mutex = New-Object System.Threading.Mutex($true, 'Local\agent-snapshot-guard', [ref]$created)

@@ -1,0 +1,18 @@
+{
+  "schema": "asg-rule/v1",
+  "app": "trae",
+  "vendor": "bytedance",
+  "display": "Trae (ByteDance)",
+  "maturity": "community",
+  "dataRoots": ["%USERPROFILE%/.trae", "%APPDATA%/Trae"],
+  "actions": {
+    "denyWriteDirs": [],
+    "deleteDirNames": [],
+    "deleteFileNames": [],
+    "quarantineFileNames": [],
+    "monitorFileNames": ["*.jsonl", "*.db", "*.log"]
+  },
+  "telemetryHosts": [],
+  "notes": "Community-submitted data roots; treat as experimental. Observability only.",
+  "references": []
+}
