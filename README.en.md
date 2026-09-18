@@ -1,120 +1,118 @@
 # Agent Snapshot Guard
 
-**You use AI coding tools to write code. Do you know what they store on your machine?**
+**What do AI coding tools store on your machine - and what do they quietly send out? See it, then decide for yourself.**
 
-| Tool | What it keeps on your disk |
-|---|---|
-| Claude Code | `~/.claude/projects/` - your **entire conversation history** (plain JSONL) |
-| ZCode (Zhipu) | caught by the community packing the **whole workspace incl. full .git history** for cloud upload, no in-app toggle ([forensics](docs/EVIDENCE-zcode.md), [vendor response](https://forum.trae.cn/t/topic/181727)) |
-| Cursor | codebase embeddings **uploaded to vendor cloud by default** for retrieval |
-| Trae / Windsurf / ... | their own transcripts, caches, telemetry |
-
-None of these come with a decent viewer. When something breaks, you don't even know where the evidence is.
-
-**This tool does three things:**
-
-1. **See** - inventory what these tools store on your machine
-2. **Watch** - monitor their data dirs, log-only, never touching files
-3. **Act** - after you've seen enough, *you* decide to deny-write, delete, or quarantine
-
-> 🚫 **It never decides for you.** Ships with zero rules. No vendor is presumed guilty. Every step - enable, arm, disarm - is your explicit keystroke.
+A small community-built, open-source tool. No side-taking, no naming names, no decisions made on your behalf.
 
 ---
 
-## 🚀 30-second start
+## When you see one cockroach
 
-**Windows 10/11 · PowerShell 5.1+ · no admin required**
+One AI coding tool got caught packing users' entire workspaces for upload - .git history included, no in-app toggle, privacy settings be damned. Official apology, fix, open-source promise... and then what?
+
+Not an isolated case. Caught overseas, caught domestically. The old saying holds: **when you spot one cockroach, the walls are already crawling.**
+
+- Apart from a handful of open-source agents, **nobody knows what closed-source tools do behind your back**
+- Indie devs mostly don't care about data safety - but the moment **commercial code, client data, internal docs** are involved, privacy in B2B is a hard line
+- What's missing is a tool that makes AI tools' local data behavior **visible, controllable, and forensically documentable**
+
+This project fills that gap. Community-grade, minimal, honest - it does not claim "enterprise-grade security".
+
+---
+
+## What it does
+
+Three steps, each pressed by you:
 
 ```powershell
+# Windows 10/11 · PowerShell 5.1+ · no admin required
 git clone https://github.com/TSOFTP-afk/agent-snapshot-guard.git
 cd agent-snapshot-guard
 
-.\AgentSnapshotGuard.ps1 examples            # list inert templates (nothing happens yet)
-.\AgentSnapshotGuard.ps1 enable -App zcode   # observe mode: watch, never delete
-.\AgentSnapshotGuard.ps1 status
+.\AgentSnapshotGuard.ps1 examples            # 1) list inert templates (nothing happens yet)
+.\AgentSnapshotGuard.ps1 enable -App <name>  # 2) observe mode: log only, never deletes
+.\AgentSnapshotGuard.ps1 status              # 3) see what it observed
+.\AgentSnapshotGuard.ps1 arm -App <name>     # 4) your call: deny-write + delete + quarantine
 ```
+
+`status` looks like:
 
 ```
 [*] engine: active-rules=1  sentinel=running (pid 13164)  autostart=yes
 [*] APP            MODE      EVIDENCE    ARTIFACTS-NOW
-  zcode           observe   verified    0
+  <your-app>     observe   community   3
 ```
 
-Convinced? Arm it:
+Regret anytime:
 
 ```powershell
-.\AgentSnapshotGuard.ps1 arm -App zcode      # deny-write / delete / quarantine now active
-```
-
-Regret?
-
-```powershell
-.\AgentSnapshotGuard.ps1 disarm -App zcode   # back to observe
-.\AgentSnapshotGuard.ps1 uninstall           # clean teardown
+.\AgentSnapshotGuard.ps1 disarm -App <name>   # back to observe
+.\AgentSnapshotGuard.ps1 disable -App <name>  # fully off
+.\AgentSnapshotGuard.ps1 uninstall            # clean teardown, like it never existed
 ```
 
 ---
 
-## 🛡️ Will it touch my code?
+## Factory principles: zero rules, zero arming, zero stance
 
-**No.** Hard rules (enforced in [docs/RULES.md](docs/RULES.md)):
+- The engine contains **no product-specific rules**; bundled templates live in `examples/`, inert - until `enable`, not a single byte is touched
+- Observe mode **only logs**; deleting/deny-write requires your explicit `arm`
+- Operates only inside the tools' own data dirs; your projects, your `.git`, your workspaces are untouchable by design
+- Every delete/quarantine is SHA256-logged - verifiable, recoverable
+- Own tool? Copy [`custom.example.json`](examples/custom.example.json) and edit ([schema](docs/RULES.md))
 
-- Only operates inside **the tools' own data dirs** (`~/.zcode`, `~/.claude`, `~/.cursor`, ...)
-- Your projects, your `.git`, your workspaces are untouchable by design
-- **Observe mode deletes nothing**; destructive actions require an explicit `arm`
-- Every delete/quarantine is SHA256-logged to `%USERPROFILE%\.agent-snapshot-guard\guard.log`
+## 🪤 What it can and cannot stop
 
-Four layers (active only for enabled+armed rules): ACL write-deny · kill sentinel (5s sweep) · optional network quarantine (admin) · observe mode (default).
+Honesty first:
 
----
+**Can stop:**
+- Known snapshot/checkpoint artifacts at write time (deny-write makes creation fail)
+- Known artifact patterns before upload (found = destroyed)
+- Known telemetry domains (optional network layer, admin)
 
-## 📦 Templates
+**Cannot stop:**
+- Vendors relocating storage, changing protocols, altering file signatures - a cat-and-mouse game requiring constant community updates
+- Purely server-side behavior (you can't block what you can't see)
+- **Real, strong privacy protection** (sandboxing, full-traffic audit, DLP) - that's commercial products' job; a community tool doing "visibility + minimal interception" is already pulling its weight
 
-| Template | Basis | Default action |
+Bottom line: this tool is a window screen, not a vault. But a screen beats an open door.
+
+## Four layers
+
+| Layer | Means | In one line |
 |---|---|---|
-| `zcode` | full forensics ([doc](docs/EVIDENCE-zcode.md)) | armable: deny checkpoints dir + delete snapshot artifacts |
-| `claude-code` | community observation | observe only |
-| `cursor` | community observation | observe only |
-| `trae` / `windsurf` | experimental | observe only |
-| your tool? | - | copy [`custom.example.json`](examples/custom.example.json), 5 minutes |
+| L0 | observe mode | log only, default posture |
+| L1 | ACL write-deny | dangerous dirs fail at creation, owner-right, no admin |
+| L2 | kill sentinel | 5s sweep, SHA256 evidence trail |
+| L3 | network quarantine | optional, admin |
 
-Templates live in `examples/` and are **never auto-loaded**; `enable` copies one into your local rules dir. They only state publicly known behavior - no accusations.
+## FAQ
 
----
+**Which templates should I enable?**
+Look and decide. This tool's stance is precisely not to make that call for you.
 
-## ❓ FAQ
+**Will it touch my project files?**
+No. Rules may only target the tools' own data dirs - your projects, `.git`, workspaces are hard red lines ([policy](docs/RULES.md)).
 
-**I don't use ZCode - is this relevant to me?**
-Yes. Any AI tool's data dir plugs in via a template or a 5-minute custom rule. And even with nothing enabled, you own the logging/forensics framework for the next incident.
-
-**Does observe mode slow my machine?**
-No. A directory enumeration every 5 seconds. No service, no driver.
-
-**Antivirus conflicts?**
-No install, no driver, no injection - just built-in `icacls` and file ops. Some AVs flag PS scripts; whitelist it.
+**Performance impact?**
+Directory enumeration every 5 seconds. No service, no driver, no injection.
 
 **macOS / Linux?**
-Windows-only today. Rules are JSON; cross-platform PRs welcome.
+Windows today (PS 5.1+). Rules are JSON - PRs welcome.
 
-**Why not just uninstall those tools?**
-Uninstalling is indeed cleanest. But if you still need them, this is the only middle ground: keep using them while staying informed and in control.
+**Are templates trustworthy?**
+Community observations only, inert, sourced; `verified` requires reproducible forensics. Don't trust it - verify it, or write your own.
 
----
+## Origin
 
-## 📜 Origin
+Started as a hotfix after one incident ([forensics](docs/EVIDENCE-zcode.md)). Then it clicked: one vendor caught means all of them deserve a look - a patch shouldn't serve a single tool.
 
-Sep 2026: developer ferstar reverse-engineered Zhipu's ZCode silently packing entire workspaces - full .git history, reflog, packfiles - into encrypted uploads with no opt-out ([forensics](docs/EVIDENCE-zcode.md), [vendor response](https://forum.trae.cn/t/topic/181727), [IT Home](https://www.ithome.com/1/004/310.htm), [BlockBeats](https://en.theblockbeats.news/flash/367816)).
+## Contributing
 
-The lesson isn't about one company - it's a structural gap: **users have zero visibility into what AI tools store and send.** This project started as a hotfix for that incident; its stance is general: no side-taking, no accusations - visibility and control back to the user.
+- Templates for new tools ([docs/RULES.md](docs/RULES.md): neutral wording, always inert)
+- Report observed behavior (issue + logs)
+- Cross-platform (PS 7 / *nix)
 
----
+## License
 
-## 🤝 Contributing
-
-- New tool templates → [schema & red lines](docs/RULES.md) (templates go to `examples/`, always inert, neutral wording)
-- Report observed tool behavior (open an issue with logs)
-- Cross-platform support
-
-## 📄 License
-
-[MIT](LICENSE) · Not affiliated with any vendor.
+[MIT](LICENSE) · Not affiliated with any vendor; rules state publicly known behavior only.
