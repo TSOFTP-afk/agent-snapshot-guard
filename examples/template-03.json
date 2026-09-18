@@ -1,0 +1,17 @@
+{
+  "schema": "asg-rule/v1",
+  "app": "template-03",
+  "display": "Template 03 (community)",
+  "maturity": "community",
+  "dataRoots": ["%USERPROFILE%/.cursor", "%APPDATA%/Cursor"],
+  "actions": {
+    "denyWriteDirs": [],
+    "deleteDirNames": [],
+    "deleteFileNames": [],
+    "quarantineFileNames": [],
+    "monitorFileNames": ["*.log", "*.vscdb", "*.db"]
+  },
+  "telemetryHosts": [],
+  "notes": "Observes local IDE data dirs. Index embeddings may sync to vendor cloud depending on product privacy settings - that is a product setting, not provided by this tool. No accusation implied.",
+  "references": []
+}

@@ -1,0 +1,24 @@
+{
+  "schema": "asg-rule/v1",
+  "app": "template-01",
+  "display": "Template 01 (incident-backed)",
+  "maturity": "verified",
+  "dataRoots": ["%USERPROFILE%/.zcode"],
+  "actions": {
+    "denyWriteDirs": ["v2/checkpoints"],
+    "deleteDirNames": ["checkpoints", "pending"],
+    "deleteFileNames": ["*.tar.gz.enc", "*.envelope.json"],
+    "quarantineFileNames": [],
+    "monitorFileNames": []
+  },
+  "telemetryHosts": [
+    "sdk.rum.aliyuncs.com",
+    "proj-xtrace-7e235817c9b9381c22d8b743908d469f-cn-beijing.cn-beijing.log.aliyuncs.com"
+  ],
+  "notes": "Backed by reproducible community forensics (docs/EVIDENCE-incident.md): full-workspace snapshot incl. version-control history captured at session end and uploaded regardless of in-app toggles. Subject identity intentionally not stated in this template - see references and the forensics doc. Enable is observe-only; arming is your decision.",
+  "references": [
+    "https://forum.trae.cn/t/topic/181727",
+    "https://en.theblockbeats.news/flash/367816",
+    "https://blog.ferstar.org/posts/zcode-silent-workspace-snapshot-upload/"
+  ]
+}

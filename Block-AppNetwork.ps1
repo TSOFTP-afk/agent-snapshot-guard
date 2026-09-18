@@ -4,24 +4,21 @@
   Optional layer-3 network quarantine for guarded AI clients (agent-snapshot-guard).
 
 .DESCRIPTION
-  Mode B (-TelemetryHosts): pin the rule's known telemetry endpoints to 0.0.0.0
-  in the hosts file. Mild, reversible. Does NOT stop dynamic upload endpoints.
+  Mode B (-TelemetryHosts): pin the active rule's known telemetry endpoints to
+  0.0.0.0 in the hosts file. Mild, reversible. Does NOT stop dynamic upload
+  endpoints.
 
   Mode A (-FirewallBlock): outbound firewall block for the app's exe - full
   quarantine mode. Kills ALL traffic including the model API.
 
-  Why not "block vendor cloud IP ranges"? Windows Firewall has no domain-based
-  rules, and AI vendors often host model APIs on the same clouds as telemetry -
-  IP-range blocks cut your own model access.
-
 .EXAMPLE
-  .\Block-AppNetwork.ps1 -App zcode -TelemetryHosts
-  .\Block-AppNetwork.ps1 -App zcode -FirewallBlock -Exe F:\Zcode\ZCode.exe
-  .\Block-AppNetwork.ps1 -App zcode -Undo
+  .\Block-AppNetwork.ps1 -App template-01 -TelemetryHosts
+  .\Block-AppNetwork.ps1 -App template-01 -FirewallBlock -Exe C:\path\to\app.exe
+  .\Block-AppNetwork.ps1 -App template-01 -Undo
 #>
 [CmdletBinding()]
 param(
-  [string]$App = 'zcode',
+  [string]$App = '',
   [string]$Exe = '',
   [switch]$FirewallBlock,
   [switch]$TelemetryHosts,
@@ -29,7 +26,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$RulesDir = Join-Path (Split-Path -Parent $PSCommandPath) 'rules'
+$RulesDir = Join-Path (Split-Path -Parent $PSCommandPath) 'examples'
 $RuleName = 'agent-snapshot-guard: block ' + $App + ' outbound'
 $HostsPath   = Join-Path $env:SystemRoot 'System32\drivers\etc\hosts'
 $HostsBackup = Join-Path $env:SystemRoot 'System32\drivers\etc\hosts.asg-backup'
@@ -57,7 +54,7 @@ if ($Undo) {
 }
 
 if ($FirewallBlock) {
-  if (-not ($Exe -and (Test-Path $Exe))) { throw "pass -Exe with the full path of the app's exe (e.g. F:\Zcode\ZCode.exe)" }
+  if (-not ($Exe -and (Test-Path $Exe))) { throw "pass -Exe with the full path of the app's exe" }
   New-NetFirewallRule -DisplayName $RuleName -Direction Outbound -Action Block -Program $Exe -Profile Any | Out-Null
   Write-Host ("[+] outbound BLOCKED for: " + $Exe)
   Write-Host '[!] quarantine mode: model API is also blocked. Use -Undo to restore.'

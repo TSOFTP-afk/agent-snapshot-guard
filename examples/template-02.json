@@ -1,0 +1,17 @@
+{
+  "schema": "asg-rule/v1",
+  "app": "template-02",
+  "display": "Template 02 (community)",
+  "maturity": "community",
+  "dataRoots": ["%USERPROFILE%/.claude"],
+  "actions": {
+    "denyWriteDirs": [],
+    "deleteDirNames": [],
+    "deleteFileNames": [],
+    "quarantineFileNames": [],
+    "monitorFileNames": ["*.jsonl"]
+  },
+  "telemetryHosts": [],
+  "notes": "Observes local transcripts, todos and shell snapshots. Observability only - arming would break session resume. No accusation implied.",
+  "references": []
+}
