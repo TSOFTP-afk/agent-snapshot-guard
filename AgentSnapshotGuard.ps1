@@ -169,18 +169,23 @@ function Is-Armed($rule) {
   return (@($s.armed) -contains $rule.app)
 }
 
-function Invoke-Classify([string]$root,$rule,[string]$full,[bool]$armed) {
+function Invoke-Classify([string]$root,$rule,[string]$full,[bool]$armed,[bool]$apply = $true) {
   $rel = Get-RelativeInside $full $root
   if (-not $rel) { return 'outside' }
   $a = $rule.actions
   if ($armed) {
     if (Test-SegmentMatch $rel @($a.deleteDirNames)) {
+      if (-not $apply) { return 'would-delete' }
       if (Remove-AnyWay $full) { return 'deleted' } else { return 'locked' }
     }
     if (Test-NameMatch $full @($a.deleteFileNames)) {
+      if (-not $apply) { return 'would-delete' }
       if (Remove-AnyWay $full) { return 'deleted' } else { return 'locked' }
     }
-    if (Test-NameMatch $full @($a.quarantineFileNames)) { return (Invoke-Quarantine $root $rule.app $full) }
+    if (Test-NameMatch $full @($a.quarantineFileNames)) {
+      if (-not $apply) { return 'would-quarantine' }
+      return (Invoke-Quarantine $root $rule.app $full)
+    }
   }
   if (Test-NameMatch $full @($a.monitorFileNames)) { return 'monitored' }
   return 'ignored'
@@ -194,7 +199,7 @@ function Invoke-SweepRule($rule) {
     if (-not (Test-Path -LiteralPath $root)) { continue }
     $files = @(Get-ChildItem -LiteralPath $root -Recurse -Force -File -ErrorAction SilentlyContinue)
     foreach ($f in $files) {
-      $act = Invoke-Classify $root $rule $f.FullName $armed
+      $act = Invoke-Classify $root $rule $f.FullName $armed $true
       if ($act -eq 'deleted' -or $act -eq 'quarantined') { $total++ }
     }
   }
@@ -234,7 +239,7 @@ function Start-Sentinel {
 function Invoke-Install {
   $rules = Get-SelectedRules
   if (@($rules).Count -eq 0) { Write-Bad ("no rules matched: " + $App); return }
-  $s = Get-Stater
+  $s = Get-State
   $enabledList = @($s.enabled); $armedList = @($s.armed)
   foreach ($rule in $rules) {
     $armed = ($rule.maturity -eq 'verified') -or $Force
@@ -281,7 +286,7 @@ function Invoke-Uninstall {
 }
 
 function Show-Status {
-  $rules = Get-Rulesr
+  $rules = Get-Rules
   $s = Get-State
   $spid = Get-SentinelPid
   $sentStr = 'stopped'; if ($spid) { $sentStr = 'running (pid ' + $spid + ')' }
@@ -299,7 +304,7 @@ function Show-Status {
       if (-not (Test-Path -LiteralPath $root)) { continue }
       $all = @(Get-ChildItem -LiteralPath $root -Recurse -Force -File -ErrorAction SilentlyContinue)
       foreach ($f in $all) {
-        $act = Invoke-Classify $root $r $f.FullName $armed
+        $act = Invoke-Classify $root $r $f.FullName $armed $false
         if ($act -ne 'ignored' -and $act -ne 'outside') { $files++ }
       }
     }
